@@ -1,0 +1,7 @@
+evadb[document]
+openai>=1.0
+instructor
+pydantic>=2.8.0,<3.0.0
+python-dotenv==1.0.0
+tiktoken
+tenacity
