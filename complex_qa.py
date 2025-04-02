@@ -355,29 +355,42 @@ if __name__ == "__main__":
         question_cost += cost
         print("\n[DEBUG] Subquestions received from generate_subquestions:")
         for idx, subq_bundle in enumerate(subquestions_bundle_list, start=1):
+            # Now 'file_names' is a *list* of Enum items
+            doc_list_str = ", ".join(fn.value for fn in subq_bundle.file_names)
             print(
                 f"  #{idx} => subquestion: '{subq_bundle.question}', "
                 f"function: '{subq_bundle.function.value}', "
-                f"doc name: '{subq_bundle.file_name.value}'"
+                f"doc name(s): [{doc_list_str}]"
             )
         print("-" * 60)
         responses = []
         for q_no, item in enumerate(subquestions_bundle_list):
             subquestion = item.question
             selected_func = item.function.value
-            selected_doc = item.file_name.value
-            print(f"\n-------> 🤔 Processing subquestion #{q_no+1}: {subquestion} | function: {selected_func} | data source: {selected_doc}")
-            if selected_func == "vector_retrieval":
+            # selected_doc = item.file_name.value
+            print(f"\n-------> 🤔 Processing subquestion #{q_no+1}: {subquestion} | function: {selected_func}")
+            for doc_enum in item.file_names:
+                selected_doc = doc_enum.value  # Extract the actual string from the Enum
+                print(f"   -> Checking document: {selected_doc}")
+
+                # Validate doc name
                 if selected_doc not in doc_names:
-                    print(f"[ERROR] '{selected_doc}' is not in doc_names!\n"
-                          f"        We only have: {doc_names[:5]} ... (and so on)")
+                    print(
+                        f"[ERROR] '{selected_doc}' is not in doc_names!\n"
+                        f"        We only have: {doc_names[:5]} ... (and so on)"
+                    )
                     sys.exit(1)
-                response, cost = vector_retrieval(cursor, llm_model, subquestion, selected_doc)
-            elif selected_func == "llm_retrieval":
-                response, cost = summary_retrieval(llm_model, subquestion, palantir_docs[selected_doc])
-            else:
-                print(f"\nCould not process subquestion: {subquestion} function: {selected_func} data source: {selected_doc}\n")
-                exit(0)
+
+                # If it's a vector_retrieval function, call your retrieval
+                if selected_func == "vector_retrieval":
+                    response, retrieval_cost = vector_retrieval(
+                        cursor, llm_model, subquestion, selected_doc
+                    )
+                elif selected_func == "llm_retrieval":
+                    response, cost = summary_retrieval(llm_model, subquestion, palantir_docs[selected_doc])
+                else:
+                    print(f"\nCould not process subquestion: {subquestion} function: {selected_func} data source: {selected_doc}\n")
+                    exit(0)
             print(f"✅ Response #{q_no+1}: {response}")
             responses.append(response)
             question_cost += cost

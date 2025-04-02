@@ -222,6 +222,7 @@ def generate_subquestions(
     # ---------------------------------------------------------------------
     valid_file_names = file_names  # e.g. ["PALANTIR_JOBS_1", ..., "PALANTIR_JOBS_84"]
     FilenameEnum = Enum("FilenameEnum", {x.upper(): x for x in valid_file_names})
+    # FilenameEnum = (List[FilenameEnum], {x.upper(): x for x in valid_file_names})
 
     # ---------------------------------------------------------------------
     # 2) Create pydantic classes for subquestions & the top-level container
@@ -236,7 +237,7 @@ def generate_subquestions(
             ...,
             description="The function to use: vector_retrieval or llm_retrieval."
         )),
-        file_name=(FilenameEnum, Field(
+        file_names=(List[FilenameEnum], Field(
             ...,
             description="Which document to use to answer this subquestion."
         )),
@@ -277,7 +278,7 @@ def generate_subquestions(
                 {
                   "question": "What are Palantir's main products?",
                   "function": "vector_retrieval",
-                  "file_name": "PALANTIR_OVERVIEW"
+                  "file_names": "PALANTIR_OVERVIEW"
                 }
               ]
             }
@@ -298,7 +299,8 @@ def generate_subquestions(
                 {
                   "question": "Which open roles mention entry-level or junior engineering positions in New York?",
                   "function": "vector_retrieval",
-                  "file_name": "PALANTIR_JOBS_1"
+                  "file_names": ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", "PALANTIR_JOBS_3", "PALANTIR_JOBS_4", "PALANTIR_JOBS_5", "PALANTIR_JOBS_6", "PALANTIR_JOBS_7", "PALANTIR_JOBS_8", "PALANTIR_JOBS_9", "PALANTIR_JOBS_10", "PALANTIR_JOBS_11", "PALANTIR_JOBS_12", "PALANTIR_JOBS_13", "PALANTIR_JOBS_14", "PALANTIR_JOBS_15", "PALANTIR_JOBS_16", "PALANTIR_JOBS_17", "PALANTIR_JOBS_18", "PALANTIR_JOBS_19", "PALANTIR_JOBS_20", "PALANTIR_JOBS_21", "PALANTIR_JOBS_22", "PALANTIR_JOBS_23", "PALANTIR_JOBS_24", "PALANTIR_JOBS_25", "PALANTIR_JOBS_26", "PALANTIR_JOBS_27", "PALANTIR_JOBS_28", "PALANTIR_JOBS_29", "PALANTIR_JOBS_30", "PALANTIR_JOBS_31", "PALANTIR_JOBS_32", "PALANTIR_JOBS_33", "PALANTIR_JOBS_34", "PALANTIR_JOBS_35", "PALANTIR_JOBS_36", "PALANTIR_JOBS_37", "PALANTIR_JOBS_38", "PALANTIR_JOBS_39", "PALANTIR_JOBS_40", "PALANTIR_JOBS_41", "PALANTIR_JOBS_42", "PALANTIR_JOBS_43", "PALANTIR_JOBS_44", "PALANTIR_JOBS_45", "PALANTIR_JOBS_46", "PALANTIR_JOBS_47", "PALANTIR_JOBS_48", "PALANTIR_JOBS_49", "PALANTIR_JOBS_50", "PALANTIR_JOBS_51", "PALANTIR_JOBS_52", "PALANTIR_JOBS_53", "PALANTIR_JOBS_54", "PALANTIR_JOBS_55", "PALANTIR_JOBS_56", "PALANTIR_JOBS_57", "PALANTIR_JOBS_58", "PALANTIR_JOBS_59", "PALANTIR_JOBS_60", "PALANTIR_JOBS_61", "PALANTIR_JOBS_62", "PALANTIR_JOBS_63", "PALANTIR_JOBS_64", "PALANTIR_JOBS_65", "PALANTIR_JOBS_66", "PALANTIR_JOBS_67", "PALANTIR_JOBS_68", "PALANTIR_JOBS_69", "PALANTIR_JOBS_70", "PALANTIR_JOBS_71", "PALANTIR_JOBS_72", "PALANTIR_JOBS_73", "PALANTIR_JOBS_74", "PALANTIR_JOBS_75", "PALANTIR_JOBS_76", "PALANTIR_JOBS_77", "PALANTIR_JOBS_78", "PALANTIR_JOBS_79", "PALANTIR_JOBS_80", "PALANTIR_JOBS_81", "PALANTIR_JOBS_82", "PALANTIR_JOBS_83", "PALANTIR_JOBS_84"]
+ 
                 }
               ]
             }
@@ -319,7 +321,7 @@ def generate_subquestions(
                 {
                   "question": "What philanthropic efforts does Palantir have?",
                   "function": "llm_retrieval",
-                  "file_name": "PALANTIR_PHILANTHROPY"
+                  "file_names": "PALANTIR_PHILANTHROPY"
                 }
               ]
             }
@@ -340,12 +342,12 @@ def generate_subquestions(
                 {
                   "question": "What is Palantir's mission statement?",
                   "function": "vector_retrieval",
-                  "file_name": "PALANTIR_OVERVIEW"
+                  "file_names": "PALANTIR_OVERVIEW"
                 },
                 {
                   "question": "List Data Science internship roles in London.",
                   "function": "vector_retrieval",
-                  "file_name": "PALANTIR_JOBS_2"
+                  "file_names": ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", "PALANTIR_JOBS_3", "PALANTIR_JOBS_4", "PALANTIR_JOBS_5", "PALANTIR_JOBS_6", "PALANTIR_JOBS_7", "PALANTIR_JOBS_8", "PALANTIR_JOBS_9", "PALANTIR_JOBS_10", "PALANTIR_JOBS_11", "PALANTIR_JOBS_12", "PALANTIR_JOBS_13", "PALANTIR_JOBS_14", "PALANTIR_JOBS_15", "PALANTIR_JOBS_16", "PALANTIR_JOBS_17", "PALANTIR_JOBS_18", "PALANTIR_JOBS_19", "PALANTIR_JOBS_20", "PALANTIR_JOBS_21", "PALANTIR_JOBS_22", "PALANTIR_JOBS_23", "PALANTIR_JOBS_24", "PALANTIR_JOBS_25", "PALANTIR_JOBS_26", "PALANTIR_JOBS_27", "PALANTIR_JOBS_28", "PALANTIR_JOBS_29", "PALANTIR_JOBS_30", "PALANTIR_JOBS_31", "PALANTIR_JOBS_32", "PALANTIR_JOBS_33", "PALANTIR_JOBS_34", "PALANTIR_JOBS_35", "PALANTIR_JOBS_36", "PALANTIR_JOBS_37", "PALANTIR_JOBS_38", "PALANTIR_JOBS_39", "PALANTIR_JOBS_40", "PALANTIR_JOBS_41", "PALANTIR_JOBS_42", "PALANTIR_JOBS_43", "PALANTIR_JOBS_44", "PALANTIR_JOBS_45", "PALANTIR_JOBS_46", "PALANTIR_JOBS_47", "PALANTIR_JOBS_48", "PALANTIR_JOBS_49", "PALANTIR_JOBS_50", "PALANTIR_JOBS_51", "PALANTIR_JOBS_52", "PALANTIR_JOBS_53", "PALANTIR_JOBS_54", "PALANTIR_JOBS_55", "PALANTIR_JOBS_56", "PALANTIR_JOBS_57", "PALANTIR_JOBS_58", "PALANTIR_JOBS_59", "PALANTIR_JOBS_60", "PALANTIR_JOBS_61", "PALANTIR_JOBS_62", "PALANTIR_JOBS_63", "PALANTIR_JOBS_64", "PALANTIR_JOBS_65", "PALANTIR_JOBS_66", "PALANTIR_JOBS_67", "PALANTIR_JOBS_68", "PALANTIR_JOBS_69", "PALANTIR_JOBS_70", "PALANTIR_JOBS_71", "PALANTIR_JOBS_72", "PALANTIR_JOBS_73", "PALANTIR_JOBS_74", "PALANTIR_JOBS_75", "PALANTIR_JOBS_76", "PALANTIR_JOBS_77", "PALANTIR_JOBS_78", "PALANTIR_JOBS_79", "PALANTIR_JOBS_80", "PALANTIR_JOBS_81", "PALANTIR_JOBS_82", "PALANTIR_JOBS_83", "PALANTIR_JOBS_84"]
                 }
               ]
             }
