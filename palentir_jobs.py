@@ -52,32 +52,21 @@ def transform_job_posting(posting_dict):
     tags_str   = ", ".join(tags_list)
     all_loc_str= ", ".join(all_locations)
 
-    final_doc = f"""
-JOB ID: {job_id}
-TITLE: {job_title}
-COMMITMENT: {commitment}
-DEPARTMENT: {department}
-TEAM: {team}
-LEVEL: {level}
-LOCATION: {location}
-ALL LOCATIONS: {all_loc_str}
-COUNTRY: {country}
-WORKPLACE TYPE: {workplace}
-
-TAGS: {tags_str}
-
-DESCRIPTION:
-{description_text}
-
-BULLET SECTIONS:
-{('\n\n'.join(bullet_section_text)).strip()}
-
-CLOSING:
-{closing_text}
-    """.strip()
-
-    # Collapse all whitespace (including newlines) into single spaces:
-    final_doc = " ".join(final_doc.split())
+    final_doc = {
+"job_id": {job_id},
+"job_title": {job_title},
+"commitment": {commitment},
+"department": {department},
+"team": {team},
+"level": {level},
+"location": {location},
+"all_locations": {all_loc_str},
+"country": {country},
+"workplace_type": {workplace},
+"tags": {tags_str},
+"description":{description_text},
+"bullet_sections":{('\n\n'.join(bullet_section_text))},
+"closing_text":{closing_text.strip()}}
     return final_doc
 
 
@@ -123,40 +112,105 @@ def scrape_palantir_jobs(url=None):
 
 #     print(f"[INFO] Wrote {len(postings)} job text files to '{output_dir}'")
 
-def write_jobs_to_files(postings, output_dir="data/palantir_careers"):
+# def write_jobs_to_files(postings, output_dir="data/palantir_careers"):
+#     """
+#     Writes each job posting into a file named PALANTIR_JOBS_{i+1}.txt
+#     Returns a list of doc names: ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", ...]
+#     """
+#     if not os.path.exists(output_dir):
+#         try:
+#             os.makedirs(output_dir)
+#         except Exception as e:
+#             raise RuntimeError(f"Failed to create directory {output_dir}: {e}")
+
+#     doc_names = []
+#     for i, posting in enumerate(postings):
+#         doc_name = f"PALANTIR_JOBS_{i+1}"  # e.g., PALANTIR_JOBS_1
+#         file_path = os.path.join(output_dir, f"{doc_name}.txt")
+
+#         # Transform job posting into text
+#         try:
+#             job_text = transform_job_posting(posting)
+#             if not job_text.strip():
+#                 raise ValueError(f"Job text for posting {i+1} is empty.")
+#         except Exception as e:
+#             print(f"Error transforming posting {i+1}: {e}")
+#             continue
+
+#         # Write to file
+#         try:
+#             with open(file_path, "w", encoding="utf-8") as f:
+#                 f.write(job_text)
+#             doc_names.append(doc_name)
+#         except Exception as e:
+#             print(f"Error writing file {file_path}: {e}")
+
+#     # Validate return value
+#     assert all(isinstance(name, str) for name in doc_names), "doc_names must contain only strings."
+#     return doc_names
+
+def chunk_text_and_attach_metadata(post_dict):
     """
-    Writes each job posting into a file named PALANTIR_JOBS_{i+1}.txt
-    Returns a list of doc names: ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", ...]
+    1) Gather metadata from post_dict (transform_job_posting).
+    2) Create one big text from the final_doc (already done by transform).
+       But we'll chunk the *already combined* text if we wish, or we can chunk
+       only the "description" portion. This example lumps everything into one big text.
+    3) Return a list of row dicts, each row containing chunked text + metadata columns.
     """
-    if not os.path.exists(output_dir):
-        try:
-            os.makedirs(output_dir)
-        except Exception as e:
-            raise RuntimeError(f"Failed to create directory {output_dir}: {e}")
+    # Step 1: get all fields as a dictionary
+    meta = transform_job_posting(post_dict)
 
-    doc_names = []
-    for i, posting in enumerate(postings):
-        doc_name = f"PALANTIR_JOBS_{i+1}"  # e.g., PALANTIR_JOBS_1
-        file_path = os.path.join(output_dir, f"{doc_name}.txt")
+    # Combine the textual fields if you want to chunk the entire "final doc".
+    # We'll do that below: 'final_doc' is basically all text fields concatenated.
+    final_doc = (
+        f"JOB TITLE: {meta['job_title']}\n"
+        f"DEPARTMENT: {meta['department']}\n"
+        f"LEVEL: {meta['level']}\n"
+        f"LOCATION: {meta['location']}\n"
+        f"TEAM: {meta['team']}\n"
+        f"ALL_LOCATIONS: {meta['all_locations']}\n"
+        f"WORKPLACE_TYPE: {meta['workplace_type']}\n"
+        f"TAGS: {meta['tags']}\n\n"
+        f"DESCRIPTION:\n{meta['description']}\n\n"
+        f"BULLET SECTIONS:\n{meta['bullet_sections']}\n\n"
+        f"CLOSING:\n{meta['closing_text']}"
+    )
 
-        # Transform job posting into text
-        try:
-            job_text = transform_job_posting(posting)
-            if not job_text.strip():
-                raise ValueError(f"Job text for posting {i+1} is empty.")
-        except Exception as e:
-            print(f"Error transforming posting {i+1}: {e}")
-            continue
+    # Optionally collapse repeated whitespace in final_doc
+    final_doc = " ".join(final_doc.split())
 
-        # Write to file
-        try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(job_text)
-            doc_names.append(doc_name)
-        except Exception as e:
-            print(f"Error writing file {file_path}: {e}")
+    # Step 2: chunk the final_doc
+    chunks = simple_chunker(final_doc, chunk_size=500)
 
-    # Validate return value
-    assert all(isinstance(name, str) for name in doc_names), "doc_names must contain only strings."
-    return doc_names
+    # Build row-dicts, each containing all meta + chunked text + chunk_id
+    rows = []
+    for idx, c in enumerate(chunks):
+        # Copy the entire metadata dictionary so each row has all the fields
+        row = dict(meta)
+        # Overwrite or add fields specific to the chunk
+        row["chunk_id"] = idx
+        row["data"] = c
+        rows.append(row)
+
+    return rows
+
+def simple_chunker(text, chunk_size=500):
+    """
+    Very naive chunker: just splits the string into slices of length=chunk_size.
+    """
+    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+
+import csv
+
+def write_job_chunks_to_csv(filename, row_dicts):
+    if not row_dicts:
+        return
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    field_names = list(row_dicts[0].keys())
+    with open(filename, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=field_names)
+        writer.writeheader()
+        for row in row_dicts:
+            writer.writerow(row)
 

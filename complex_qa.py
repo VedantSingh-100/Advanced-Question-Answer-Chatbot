@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 from subquestion_generator import generate_subquestions
 import evadb
 from openai_utils import llm_call
-from palentir_jobs import write_jobs_to_files, scrape_palantir_jobs, transform_job_posting
+from palentir_jobs import scrape_palantir_jobs, transform_job_posting, chunk_text_and_attach_metadata, write_job_chunks_to_csv
 
 
 if not load_dotenv():
@@ -19,59 +19,124 @@ if not load_dotenv():
     )
     exit(1)
 
-
-# def generate_vector_stores(cursor, docs):
-#     """Generate a vector store for the docs using evadb.
-#     """
-#     for doc in docs:
-#         print(f"Creating vector store for {doc}...")
-#         cursor.query(f"DROP TABLE IF EXISTS {doc};").df()
-#         cursor.query(f"LOAD DOCUMENT 'data/{doc}.txt' INTO {doc};").df()
-#         evadb_path = os.path.dirname(evadb.__file__)
-#         cursor.query(
-#             f"""CREATE FUNCTION IF NOT EXISTS SentenceFeatureExtractor
-#             IMPL  '{evadb_path}/functions/sentence_feature_extractor.py';
-#             """).df()
-
-#         cursor.query(
-#             f"""CREATE TABLE IF NOT EXISTS {doc}_features AS
-#             SELECT SentenceFeatureExtractor(data), data FROM {doc};"""
-#         ).df()
-
-#         cursor.query(
-#             f"CREATE INDEX IF NOT EXISTS {doc}_index ON {doc}_features (features) USING FAISS;"
-#         ).df()
-#         print(f"Successfully created vector store for {doc}.")
+def load_palantir_job_postings(postings):
+    """
+    postings is the list of raw job data.
+    This function will:
+      - chunk each job's text
+      - write CSV files for each job
+    Returns doc_names, i.e. the list of table/base file names
+    """
+    doc_names = []
+    for i, post_dict in enumerate(postings, start=1):
+        doc_name = f"PALANTIR_JOBS_{i}"
+        # chunk + metadata
+        rows = chunk_text_and_attach_metadata(post_dict)
+        # write CSV
+        file_path = f"data/palantir_careers/{doc_name}.csv"
+        write_job_chunks_to_csv(file_path, rows)
+        doc_names.append(doc_name)
+    return doc_names
 
 import os
 import evadb
 
 def generate_vector_stores(cursor, docs):
-    """Generate a vector store for the docs using evadb.
     """
+    For each doc in docs:
+      1) Drop table if it exists.
+      2) Create a table named `doc` with the appropriate schema.
+      3) LOAD CSV <file_path> INTO `doc`.
+      4) Create the SentenceFeatureExtractor function (if not already created).
+      5) Create a `doc_features` table to hold the extracted embeddings + metadata.
+      6) Create an index for vector searches on the features column.
+
+    Finally, print the columns of the first doc's features table for verification.
+    """
+
+    # 1) Make sure the SentenceFeatureExtractor function is created (only once, outside the loop).
+    print("Ensuring that SentenceFeatureExtractor function is created...")
+    evadb_path = os.path.dirname(evadb.__file__)
+    cursor.query(
+        f"""
+        CREATE FUNCTION IF NOT EXISTS SentenceFeatureExtractor
+        IMPL '{evadb_path}/functions/sentence_feature_extractor.py';
+        """
+    ).df()
+
+    # 2) For each doc, drop table if exists, create table, load CSV, create features table, index it.
     for doc in docs:
         print(f"Creating vector store for {doc}...")
+
+        # Drop any previous table named `doc`
         cursor.query(f"DROP TABLE IF EXISTS {doc};").df()
-        file_path = f"data/palantir_careers/{doc}.txt"
+
+        # Create a fresh table for the CSV schema
+        cursor.query(f"""
+        CREATE TABLE {doc} (
+        job_id TEXT,
+        job_title TEXT,
+        commitment TEXT,
+        department TEXT,
+        team TEXT,
+        level TEXT,
+        location TEXT,
+        all_locations TEXT,
+        country TEXT,
+        workplace_type TEXT,
+        tags TEXT,
+        description TEXT,
+        bullet_sections TEXT,
+        closing_text TEXT,
+        chunk_id INTEGER,
+        data TEXT);""").df()
+
+
+        # Construct the file path for the current doc
+        file_path = f"data/palantir_careers/{doc}.csv"
         print(f"Attempting to load from file_path = '{file_path}'")
-        cursor.query(f"LOAD DOCUMENT '{file_path}' INTO {doc};").df()
-        evadb_path = os.path.dirname(evadb.__file__)
-        cursor.query(
-            f"""CREATE FUNCTION IF NOT EXISTS SentenceFeatureExtractor
-            IMPL  '{evadb_path}/functions/sentence_feature_extractor.py';
-            """).df()
+
+        # Load the CSV into the new table
+        load_result = cursor.query(f"LOAD CSV '{file_path}' INTO {doc};").df()
+        # Optionally, you can print or inspect load_result if needed.
+        print(load_result)
+
+        cursor.query(f"DROP TABLE IF EXISTS {doc}_features;").df()  # <-- Force re-creation
 
         cursor.query(
-            f"""CREATE TABLE IF NOT EXISTS {doc}_features AS
-            SELECT SentenceFeatureExtractor(data), data FROM {doc};"""
+            f"""
+            CREATE TABLE {doc}_features AS
+            SELECT
+                SentenceFeatureExtractor(data),
+                job_id,
+                job_title,
+                commitment,
+                department,
+                team,
+                level,
+                location,
+                all_locations,
+                country,
+                workplace_type,
+                tags,
+                description,
+                bullet_sections,
+                closing_text,
+                chunk_id,
+                data
+            FROM {doc};
+            """
         ).df()
-
+        # Create an index on the features column for vector searches
         cursor.query(
             f"CREATE INDEX IF NOT EXISTS {doc}_index ON {doc}_features (features) USING FAISS;"
         ).df()
-    
-    df_sample = cursor.query("SELECT * FROM PALANTIR_JOBS_1_features LIMIT 1;").df()
-    print(df_sample.columns)
+
+    # 3) Optionally retrieve a small sample from the first doc's features table to confirm success
+    if docs:
+        df_sample = cursor.query(f"SELECT * FROM {docs[0]}_features LIMIT 1;").df()
+        print("Sample features table columns:", df_sample.columns)
+
 
 def generate_union_features_table(cursor, doc_names):
     """
@@ -95,106 +160,29 @@ def generate_union_features_table(cursor, doc_names):
     result = cursor.query(full_query).df()
     print("Created union table 'palantir_union_features' with doc_source:", result)
 
-
-# def generate_vector_stores(cursor, doc_names, folder="data/palantir_careers"):
-#     """
-#     For each document name, load its corresponding .txt file,
-#     create a features table, and build a FAISS index.
-#     Returns the list of document names (to be used later).
-#     """
-#     for doc in doc_names:
-#         print(f"Creating vector store for {doc}...")
-#         # Drop any existing table with this name
-#         cursor.query(f"DROP TABLE IF EXISTS {doc};").df()
-#         # Load the document (each file is handled separately)
-#         cursor.query(f"LOAD DOCUMENT '{folder}/{doc}.txt' INTO {doc};").df()
-#         # Create the embedding function if it doesn't exist
-#         evadb_path = os.path.dirname(evadb.__file__)
-#         cursor.query(f"""
-#             CREATE FUNCTION IF NOT EXISTS SentenceFeatureExtractor
-#             IMPL  '{evadb_path}/functions/sentence_feature_extractor.py';
-#         """).df()
-#         # Create a new table with embeddings
-#         cursor.query(f"""
-#             CREATE TABLE IF NOT EXISTS {doc}_features AS
-#             SELECT SentenceFeatureExtractor(data) AS features, data FROM {doc};
-#         """).df()
-#         # Build the FAISS index on the features
-#         cursor.query(f"""
-#             CREATE INDEX IF NOT EXISTS {doc}_index
-#             ON {doc}_features (features)
-#             USING FAISS;
-#         """).df()
-#         print(f"Successfully created vector store for {doc}.")
-#     return doc_names
-    # No need to return anything (no list returned).
-
-    # Step 3: For each document, create a corresponding vector store
-    # for doc in doc_names:
-    #     # Sanitize the document name by replacing hyphens with underscores.
-    #     sanitized_doc = doc.replace('-', '_')
-        
-    #     # Drop the table if it exists and load the document into a new table.
-    #     cursor.query(f"DROP TABLE IF EXISTS {sanitized_doc};").df()
-    #     cursor.query(f"LOAD DOCUMENT 'data/palantir_careers/{doc}.txt' INTO {sanitized_doc};").df()
-
-    #     # Create the embedding function if it doesn't exist.
-    #     evadb_path = os.path.dirname(evadb.__file__)
-    #     cursor.query(f"""
-    #         CREATE FUNCTION IF NOT EXISTS SentenceFeatureExtractor
-    #         IMPL '{evadb_path}/functions/sentence_feature_extractor.py';
-    #     """).df()
-
-    #     # Create the features table for the document.
-    #     features_table = f"{sanitized_doc}_features"
-    #     cursor.query(f"""
-    #         CREATE TABLE IF NOT EXISTS {features_table} AS
-    #         SELECT SentenceFeatureExtractor(data), data
-    #         FROM {sanitized_doc};
-    #     """).df()
-
-    #     # Create the FAISS index on the features table.
-    #     cursor.query(f"""
-    #         CREATE INDEX IF NOT EXISTS {sanitized_doc}_index
-    #         ON {features_table} (features) USING FAISS;
-    #     """).df()
-    
-    # print(f"[INFO] Created vector stores for {len(doc_names)} job docs.")
-    # return doc_names
-
-# def vector_retrieval(cursor, llm_model, question, doc_name):
-#     """Returns the answer to a factoid question using vector retrieval.
-#     """
-#     res_batch = cursor.query(
-#         f"""SELECT data FROM {doc_name}_features
-#         ORDER BY Similarity(SentenceFeatureExtractor('{question}'),features)
-#         LIMIT 3;"""
-#     ).df()
-#     context_list = []
-#     for i in range(len(res_batch)):
-#         context_list.append(res_batch["data"][i])
-#     context = "\n".join(context_list)
-#     user_prompt = f"""You are an assistant for question-answering tasks.
-#                 Use the following pieces of retrieved context to answer the question.
-#                 If you don't know the answer, just say that you don't know.
-#                 Use three sentences maximum and keep the answer concise.
-#                 Question: {question}
-#                 Context: {context}
-#                 Answer:"""
-
-#     response, cost = llm_call(model=llm_model, user_prompt=user_prompt)
-
-#     answer = response.choices[0].message.content
-#     return answer, cost
-
 def vector_retrieval(cursor, llm_model, question, doc_name):
     """Returns the answer to a factoid question using vector retrieval.
     """
     res_batch = cursor.query(
-        f"""SELECT data FROM {doc_name}_features
-        ORDER BY Similarity(SentenceFeatureExtractor('{question}'),features)
+    f"""SELECT job_id,
+        job_title,
+        commitment,
+        department,
+        team,
+        level,
+        location,
+        all_locations,
+        country,
+        workplace_type,
+        tags,
+        description,
+        bullet_sections,
+        closing_text,
+        chunk_id,
+        data FROM {doc_name}_features
+        ORDER BY Similarity(SentenceFeatureExtractor('{question}'), features)
         LIMIT 3;"""
-    ).df()
+).df()
     context_list = []
     for i in range(len(res_batch)):
         context_list.append(res_batch["data"][i])
@@ -250,39 +238,6 @@ def response_aggregator(llm_model, question, responses):
 
     return answer, cost
 
-
-def load_wiki_pages(page_titles=["Toronto", "Chicago", "Houston", "Boston", "Atlanta"]):
-
-    # Download all wiki documents
-    for title in page_titles:
-        response = requests.get(
-            "https://en.wikipedia.org/w/api.php",
-            params={
-                "action": "query",
-                "format": "json",
-                "titles": title,
-                "prop": "extracts",
-                # 'exintro': True,
-                "explaintext": True,
-            },
-        ).json()
-        page = next(iter(response["query"]["pages"].values()))
-        wiki_text = page["extract"]
-
-        data_path = Path("data")
-        if not data_path.exists():
-            Path.mkdir(data_path)
-
-        with open(data_path / f"{title}.txt", "w") as fp:
-            fp.write(wiki_text)
-
-    # Load all wiki documents
-    city_docs = {}
-    for wiki_title in page_titles:
-        input_text = open(f"data/{wiki_title}.txt", "r").read()
-        city_docs[wiki_title] = input_text[:10000]
-    return city_docs
-
 def load_job_docs(doc_names):
     """
     Read each .txt file from data/palantir_careers into a dictionary:
@@ -295,27 +250,27 @@ def load_job_docs(doc_names):
             job_docs[name] = fp.read()
     return job_docs
 
-def load_palantir_job_postings(postings, output_dir="data/palantir_careers"):
-    """
-    1. Writes job postings to files (via write_jobs_to_files).
-    2. Reads those files back into a dictionary mapping doc_name -> text.
-    3. Returns that dictionary.
-    """
+# def load_palantir_job_postings(postings, output_dir="data/palantir_careers"):
+#     """
+#     1. Writes job postings to files (via write_jobs_to_files).
+#     2. Reads those files back into a dictionary mapping doc_name -> text.
+#     3. Returns that dictionary.
+#     """
 
-    # Step 1: Write postings to disk -> get doc names
-    doc_names = write_jobs_to_files(postings, output_dir=output_dir)
+#     # Step 1: Write postings to disk -> get doc names
+#     doc_names = write_jobs_to_files(postings, output_dir=output_dir)
 
-    # Step 2: Read them back into a dict
-    docs_dict = {}
-    for name in doc_names:
-        file_path = os.path.join(output_dir, f"{name}.txt")
-        with open(file_path, "r", encoding="utf-8") as f:
-            text = f.read()
-            # You could optionally do text[:10000] to mimic the 10k truncation
-            # that was happening in the original code.
-            docs_dict[name] = text
+#     # Step 2: Read them back into a dict
+#     docs_dict = {}
+#     for name in doc_names:
+#         file_path = os.path.join(output_dir, f"{name}.txt")
+#         with open(file_path, "r", encoding="utf-8") as f:
+#             text = f.read()
+#             # You could optionally do text[:10000] to mimic the 10k truncation
+#             # that was happening in the original code.
+#             docs_dict[name] = text
 
-    return docs_dict
+#     return docs_dict
 
 if __name__ == "__main__":
 
