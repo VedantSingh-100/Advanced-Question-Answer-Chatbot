@@ -180,7 +180,7 @@ def chunk_text_and_attach_metadata(post_dict):
     final_doc = " ".join(final_doc.split())
 
     # Step 2: chunk the final_doc
-    chunks = simple_chunker(final_doc, chunk_size=500)
+    chunks = sentence_aware_chunker(final_doc, max_chunk_size=500)
 
     # Build row-dicts, each containing all meta + chunked text + chunk_id
     rows = []
@@ -194,11 +194,38 @@ def chunk_text_and_attach_metadata(post_dict):
 
     return rows
 
-def simple_chunker(text, chunk_size=500):
+import re
+
+def sentence_aware_chunker(text, max_chunk_size=500):
     """
-    Very naive chunker: just splits the string into slices of length=chunk_size.
+    1) Split text into sentences using a simple regex that looks for '.', '?', '!' followed by space/newline.
+    2) Accumulate sentences in a buffer until the total length would exceed max_chunk_size.
+    3) Yield that chunk, then continue.
     """
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    # A very naive sentence split on punctuation followed by whitespace or the end of text
+    # (You might replace this with a more advanced library like NLTK or spaCy.)
+    sentences = re.split(r'(?<=[.?!])\s+', text.strip())
+    
+    chunks = []
+    current_chunk = []
+    current_len = 0
+
+    for sent in sentences:
+        sent_len = len(sent)
+        # If adding this sentence would exceed the chunk size, finalize the current chunk
+        if current_len + sent_len > max_chunk_size and current_chunk:
+            chunks.append(" ".join(current_chunk).strip())
+            current_chunk = []
+            current_len = 0
+        
+        current_chunk.append(sent)
+        current_len += sent_len + 1  # +1 for space/punctuation
+
+    # Add the last chunk if it exists
+    if current_chunk:
+        chunks.append(" ".join(current_chunk).strip())
+
+    return chunks
 
 import csv
 
