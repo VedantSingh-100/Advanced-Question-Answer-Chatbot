@@ -93,62 +93,6 @@ def scrape_palantir_jobs(url=None):
     else:
         return []
 
-# def write_jobs_to_files(postings, output_dir="data/palantir_careers"):
-#     """
-#     Takes a list of raw job dictionaries,
-#     extracts relevant fields, and writes them to .txt files in output_dir.
-#     Files are named "PALANTIR_JOBS_1.txt", "PALANTIR_JOBS_2.txt", etc.
-#     """
-#     if not os.path.exists(output_dir):
-#         os.makedirs(output_dir)
-
-#     for i, posting in enumerate(postings, start=1):
-#         job_text = transform_job_posting(posting)
-#         # Use our custom naming scheme instead of the job's own id.
-#         job_id = f"PALANTIR_JOBS_{i}"
-#         out_path = os.path.join(output_dir, f"{job_id}.txt")
-#         with open(out_path, "w", encoding="utf-8") as f:
-#             f.write(job_text)
-
-#     print(f"[INFO] Wrote {len(postings)} job text files to '{output_dir}'")
-
-# def write_jobs_to_files(postings, output_dir="data/palantir_careers"):
-#     """
-#     Writes each job posting into a file named PALANTIR_JOBS_{i+1}.txt
-#     Returns a list of doc names: ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", ...]
-#     """
-#     if not os.path.exists(output_dir):
-#         try:
-#             os.makedirs(output_dir)
-#         except Exception as e:
-#             raise RuntimeError(f"Failed to create directory {output_dir}: {e}")
-
-#     doc_names = []
-#     for i, posting in enumerate(postings):
-#         doc_name = f"PALANTIR_JOBS_{i+1}"  # e.g., PALANTIR_JOBS_1
-#         file_path = os.path.join(output_dir, f"{doc_name}.txt")
-
-#         # Transform job posting into text
-#         try:
-#             job_text = transform_job_posting(posting)
-#             if not job_text.strip():
-#                 raise ValueError(f"Job text for posting {i+1} is empty.")
-#         except Exception as e:
-#             print(f"Error transforming posting {i+1}: {e}")
-#             continue
-
-#         # Write to file
-#         try:
-#             with open(file_path, "w", encoding="utf-8") as f:
-#                 f.write(job_text)
-#             doc_names.append(doc_name)
-#         except Exception as e:
-#             print(f"Error writing file {file_path}: {e}")
-
-#     # Validate return value
-#     assert all(isinstance(name, str) for name in doc_names), "doc_names must contain only strings."
-#     return doc_names
-
 def chunk_text_and_attach_metadata(post_dict):
     """
     1) Gather metadata from post_dict (transform_job_posting).
