@@ -24,7 +24,7 @@ def generate_vector_stores(cursor, docs):
     ).df()
 
     # 2) For each doc, drop table if exists, create table, load CSV, create features table, index it.
-    for doc in tqdm(docs, desc="Indexing docs"):
+    for doc in tqdm.tqdm(docs, desc="Indexing docs"):
         start_time = time.time()
         # Drop any previous table named `doc`
         cursor.query(f"DROP TABLE IF EXISTS {doc};").df()
