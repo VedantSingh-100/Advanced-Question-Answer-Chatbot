@@ -185,3 +185,21 @@ def write_job_chunks_to_csv(filename, row_dicts):
         for row in row_dicts:
             writer.writerow(row)
 
+def load_palantir_job_postings(postings):
+    """
+    postings is the list of raw job data.
+    This function will:
+      - chunk each job's text
+      - write CSV files for each job
+    Returns doc_names, i.e. the list of table/base file names
+    """
+    doc_names = []
+    for i, post_dict in enumerate(postings, start=1):
+        doc_name = f"PALANTIR_JOBS_{i}"
+        # chunk + metadata
+        rows = chunk_text_and_attach_metadata(post_dict)
+        # write CSV
+        file_path = f"data/palantir_careers/{doc_name}.csv"
+        write_job_chunks_to_csv(file_path, rows)
+        doc_names.append(doc_name)
+    return doc_names
