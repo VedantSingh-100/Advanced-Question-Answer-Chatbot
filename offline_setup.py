@@ -1,7 +1,7 @@
 # main_offline_setup.py
 
 from palentir_jobs import scrape_palantir_jobs, load_palantir_job_postings
-from vector_store import generate_vector_stores
+from vector_store import generate_vector_stores, generate_unified_vector_store
 import evadb
 
 def offline_setup():
@@ -18,7 +18,7 @@ def offline_setup():
 
     # 3) Build vector store
     print("Initializing EvaDB vector store & indexes...")
-    generate_vector_stores(cursor, doc_names)
+    generate_unified_vector_store(cursor, doc_names)
     print("Done. Your data and indexes are now ready.")
 
     # 4) Optionally show tables

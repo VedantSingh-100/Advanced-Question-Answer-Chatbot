@@ -22,7 +22,7 @@ app = FastAPI(
     version="0.1.0"
 )
 
-DOC_NAMES = [f"PALANTIR_JOBS_{i}" for i in range(1, 85)]  # or dynamically discovered
+DOC_NAMES = "all_jobs"  # or dynamically discovered
 LLM_MODEL = "gpt-3.5-turbo"
 
 import time
@@ -76,10 +76,7 @@ def get_job_matches(
     
     matches = aggregate_job_matches(
         cursor=cursor,
-        doc_names=DOC_NAMES,
         user_profile_text=user_profile_text,
-        per_table_limit=per_table_limit,
-        global_top_k=global_top_k
     )
     if not matches:
         return "No matches found."
@@ -111,12 +108,8 @@ def ask_question(
     for item in subquestions_list:
         subq = item.question  # use dot notation
         func = item.function   # use dot notation; if you need the string value, use item.function.value
-        doc_list = item.file_names  # a list of enums; later you'll extract their .value
 
-        if doc_name:
-            doc_list = [doc_name]
-
-        for doc in doc_list:
+        for doc in item.file_names:
             selected_doc = doc.value
             if func == "vector_retrieval" or (hasattr(func, "value") and func.value == "vector_retrieval"):
                 start_time = time.time()
@@ -147,6 +140,111 @@ def index():
     <html>
       <head>
         <title>Palantir Jobs Chatbot</title>
+        <style>
+          /* Basic reset */
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+          
+          body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+          }
+          
+          .chat-container {
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            width: 90%;
+            max-width: 600px;
+            padding: 20px;
+            text-align: center;
+          }
+
+          h1 {
+            margin-bottom: 10px;
+          }
+
+          .query-type-section {
+            margin: 20px 0;
+          }
+
+          label {
+            display: inline-block;
+            margin: 5px;
+            text-align: left;
+          }
+
+          input[type="text"],
+          textarea,
+          input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+          }
+
+          button {
+            background: #007bff;
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+
+          button:hover {
+            background: #0056b3;
+          }
+
+          .result-section {
+            margin-top: 20px;
+            text-align: left;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            min-height: 100px;
+          }
+
+          #thinking-section {
+            margin-top: 20px;
+            font-style: italic;
+            color: #555;
+          }
+
+          .guiding-questions {
+            margin: 10px 0;
+            text-align: left;
+          }
+
+          .guiding-questions h3 {
+            margin-bottom: 5px;
+          }
+
+          .guiding-questions ul {
+            list-style-type: disc;
+            padding-left: 20px;
+          }
+
+          .guiding-questions li {
+            color: #007bff;
+            cursor: pointer;
+            margin: 5px 0;
+          }
+          
+          .guiding-questions li:hover {
+            text-decoration: underline;
+          }
+        </style>
         <script>
           // Check for Speech Recognition API support
           let recognition;
@@ -157,7 +255,6 @@ def index():
               recognition.lang = 'en-US';
               recognition.onresult = function(event) {
                   let transcript = event.results[0][0].transcript;
-                  // Place transcript into the "question" input field
                   document.getElementById('question').value = transcript;
               };
               recognition.onerror = function(event) {
@@ -185,87 +282,162 @@ def index():
               document.getElementById("general-question-fields").style.display = "block";
             }
           }
+
+          // Array of "thinking" messages
+          const thinkingMessages = [
+            "Thinking...",
+            "Parsing documents...",
+            "Finding the best jobs for you...",
+            "Filtering results...",
+            "Almost there..."
+          ];
+          let thinkingIndex = 0;
+          let thinkingInterval;
+
+          // Populate the question input when a guiding question is clicked
+          function useGuidingQuestion(text) {
+            // switch to General Question tab
+            document.querySelector('input[name="query_type"][value="general"]').checked = true;
+            onQueryTypeChange();
+            document.getElementById("question").value = text;
+          }
           
           async function submitForm() {
+            // Display the "thinking" section
+            document.getElementById("thinking-section").style.display = "block";
+            thinkingIndex = 0;
+            document.getElementById("thinking-text").innerText = thinkingMessages[thinkingIndex];
+            
+            // Rotate through the thinking messages every 2 seconds
+            thinkingInterval = setInterval(() => {
+              thinkingIndex = (thinkingIndex + 1) % thinkingMessages.length;
+              document.getElementById("thinking-text").innerText = thinkingMessages[thinkingIndex];
+            }, 2000);
+
             const queryType = document.querySelector('input[name="query_type"]:checked').value;
             let resultText = "";
-            if (queryType === "matches") {
-              // Get user profile info fields
-              const skills = document.getElementById("skills").value;
-              const experience = document.getElementById("experience").value;
-              const locationPref = document.getElementById("location_pref").value;
-              const userProfile = "Skills: " + skills + "\\nExperience: " + experience + "\\nLocation Preference: " + locationPref;
-              const perTableLimit = document.getElementById("per_table_limit").value;
-              const globalTopK = document.getElementById("global_top_k").value;
-              
-              const response = await fetch("/job_matches", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  user_profile_text: userProfile,
-                  per_table_limit: parseInt(perTableLimit),
-                  global_top_k: parseInt(globalTopK)
-                })
-              });
-              const data = await response.json();
-              resultText = JSON.stringify(data, null, 2);
-            } else {
-              const question = document.getElementById("question").value;
-              const response = await fetch("/ask_question", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ question: question, k: 3 })
-              });
-              const data = await response.json();
-              resultText = JSON.stringify(data, null, 2);
+            
+            try {
+              if (queryType === "matches") {
+                const skills = document.getElementById("skills").value;
+                const experience = document.getElementById("experience").value;
+                const locationPref = document.getElementById("location_pref").value;
+                const userProfile = "Skills: " + skills + "\\nExperience: " + experience + "\\nLocation Preference: " + locationPref;
+                const perTableLimit = document.getElementById("per_table_limit").value;
+                const globalTopK = document.getElementById("global_top_k").value;
+                
+                const response = await fetch("/job_matches", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    user_profile_text: userProfile,
+                    per_table_limit: parseInt(perTableLimit),
+                    global_top_k: parseInt(globalTopK)
+                  })
+                });
+                const data = await response.json();
+                resultText = JSON.stringify(data, null, 2);
+              } else {
+                const question = document.getElementById("question").value;
+                const response = await fetch("/ask_question", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ question: question, k: 3 })
+                });
+                const data = await response.json();
+                resultText = JSON.stringify(data, null, 2);
+              }
+            } catch (e) {
+              resultText = "Error fetching data. " + e;
+            } finally {
+              // Stop the "thinking" messages
+              clearInterval(thinkingInterval);
+              document.getElementById("thinking-section").style.display = "none";
             }
+            
+            // Display the result
             document.getElementById("result").innerText = resultText;
           }
         </script>
       </head>
-      <body onload="onQueryTypeChange()">
-        <h1>Palantir Jobs Chatbot</h1>
-        <p>Select a query type:</p>
-        <label>
-          <input type="radio" name="query_type" value="matches" onchange="onQueryTypeChange()" checked>
-          Relevant Job Matches
-        </label>
-        <label>
-          <input type="radio" name="query_type" value="general" onchange="onQueryTypeChange()">
-          General Job Questions
-        </label>
-        
-        <!-- Job Matches Fields (User Profile Info) -->
-        <div id="job-matches-fields" style="display: block; margin-top:20px;">
-          <h3>Job Matches Query</h3>
-          <label>Skills: <br>
-            <input id="skills" type="text" size="50" placeholder="e.g., Python, SQL, Machine Learning">
-          </label><br><br>
-          <label>Experience: <br>
-            <textarea id="experience" rows="3" cols="50" placeholder="Briefly describe your experience"></textarea>
-          </label><br><br>
-          <label>Location Preference: <br>
-            <input id="location_pref" type="text" size="50" placeholder="e.g., New York, Remote">
-          </label><br><br>
-          <label>Per Table Limit: <input id="per_table_limit" type="number" value="3"></label><br>
-          <label>Global Top K: <input id="global_top_k" type="number" value="5"></label><br>
+      <body>
+        <div class="chat-container">
+          <h1>Palantir Jobs Chatbot</h1>
+          
+          <!-- Guiding Questions -->
+          <div class="guiding-questions">
+            <h3>Not sure what to ask? Try one of these:</h3>
+            <ul>
+              <li onclick="useGuidingQuestion('Base Salary for a Data Scientist Position?')">
+                Base Salary for a Data Scientist Position?
+              </li>
+              <li onclick="useGuidingQuestion('What are the software engineering roles available right now?')">
+                What are the software engineering roles available?
+              </li>
+              <li onclick="useGuidingQuestion('Which are the different jobs available in Palo Alto?')">
+                Which are the different jobs available in Palo Alto?
+              </li>
+              <li onclick="useGuidingQuestion('Are there hybrid job opportunities available?')">
+                Are there hybrid job opportunities available?
+              </li>
+            </ul>
+          </div>
+          
+          <div class="query-type-section">
+            <p>Select a query type:</p>
+            <label>
+              <input type="radio" name="query_type" value="matches" onchange="onQueryTypeChange()" checked>
+              Relevant Job Matches
+            </label>
+            <label>
+              <input type="radio" name="query_type" value="general" onchange="onQueryTypeChange()">
+              General Job Questions
+            </label>
+          </div>
+          
+          <!-- Job Matches Fields (User Profile Info) -->
+          <div id="job-matches-fields" style="display: block;">
+            <h3>Job Matches Query</h3>
+            <label>Skills:
+              <input id="skills" type="text" placeholder="e.g., Python, SQL, Machine Learning">
+            </label>
+            <label>Experience:
+              <textarea id="experience" rows="3" placeholder="Briefly describe your experience"></textarea>
+            </label>
+            <label>Location Preference:
+              <input id="location_pref" type="text" placeholder="e.g., New York, Remote">
+            </label>
+            <label>Per Table Limit:
+              <input id="per_table_limit" type="number" value="3">
+            </label>
+            <label>Global Top K:
+              <input id="global_top_k" type="number" value="5">
+            </label>
+          </div>
+          
+          <!-- General Questions Fields -->
+          <div id="general-question-fields" style="display: none;">
+            <h3>General Job Question</h3>
+            <label>Question:
+              <input id="question" type="text" placeholder="Enter your question here">
+            </label>
+            <!-- Voice input button -->
+            <button onclick="startVoiceInput()">🎤 Start Voice Input</button>
+          </div>
+          
+          <button onclick="submitForm()">Submit Query</button>
+          
+          <!-- "Thinking" Section -->
+          <div id="thinking-section" style="display:none;">
+            <p id="thinking-text"></p>
+          </div>
+          
+          <!-- Result Section -->
+          <div class="result-section">
+            <h2>Result:</h2>
+            <pre id="result"></pre>
+          </div>
         </div>
-        
-        <!-- General Questions Fields -->
-        <div id="general-question-fields" style="display: none; margin-top:20px;">
-          <h3>General Job Question</h3>
-          <label>Question: 
-            <input id="question" type="text" size="50" placeholder="Enter your question here">
-          </label>
-          <!-- Voice input button -->
-          <button onclick="startVoiceInput()">🎤 Start Voice Input</button>
-        </div>
-        
-        <br>
-        <button onclick="submitForm()">Submit Query</button>
-        
-        <h2>Result:</h2>
-        <pre id="result"></pre>
       </body>
     </html>
     """

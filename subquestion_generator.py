@@ -41,15 +41,16 @@ class FunctionEnum(str, Enum):
     VECTOR_RETRIEVAL = "vector_retrieval"
     LLM_RETRIEVAL = "llm_retrieval"
 
+all_jobs_NAME = "all_jobs"
+
 def generate_subquestions(
     question: str,
     file_names: List[str],
     system_prompt: str = "You are a subquestion generator.",
     user_task: str = (
         "You are an AI assistant that helps candidates find and understand "
-        "job postings at Palantir. You only have access to CSV files that each "
-        "contain chunked text + metadata for a single Palantir job posting. "
-        "Your job is to figure out which file(s) and which retrieval function to use "
+        "job postings at Palantir. All job data is stored in a single table called all_jobs. "
+        "Your job is to figure out which function to use (vector_retrieval or llm_retrieval) "
         "to answer the user's question."
     ),
     llm_model: str = "gpt-3.5-turbo",
@@ -79,8 +80,10 @@ def generate_subquestions(
     # ---------------------------------------------------------------------
     # 1) Dynamically create an Enum from the file_names
     # ---------------------------------------------------------------------
-    valid_file_names = file_names  # e.g. ["PALANTIR_JOBS_1", ..., "PALANTIR_JOBS_84"]
-    FilenameEnum = Enum("FilenameEnum", {x.upper(): x for x in valid_file_names})
+    # valid_file_names = file_names  # e.g. ["PALANTIR_JOBS_1", ..., "PALANTIR_JOBS_84"]
+    # FilenameEnum = Enum("FilenameEnum", {x.upper(): x for x in valid_file_names})
+
+    ValidFilenameEnum = Enum("FilenameEnum", {"all_jobs": all_jobs_NAME})
 
     # ---------------------------------------------------------------------
     # 2) Create pydantic classes for subquestions & the top-level container
@@ -95,9 +98,9 @@ def generate_subquestions(
             ...,
             description="The function to use: vector_retrieval or llm_retrieval."
         )),
-        file_names=(List[FilenameEnum], Field(
+        file_names=(List[ValidFilenameEnum], Field(
             ...,
-            description="Which document(s) to use to answer this subquestion."
+            description="The single dataset name to use (usually ['all_jobs']), or empty if out of scope."
         )),
     )
 
@@ -138,7 +141,7 @@ def generate_subquestions(
                 {
                   "question": "Which open roles mention senior or lead engineering positions in London?",
                   "function": "vector_retrieval",
-                  "file_names": ["PALANTIR_JOBS_1", "PALANTIR_JOBS_2", "PALANTIR_JOBS_3", "PALANTIR_JOBS_4", "..."]
+                  "file_names": ["all_jobs"]
                 }
               ]
             }
@@ -159,14 +162,7 @@ def generate_subquestions(
                 {
                   "question": "What do the job descriptions say about responsibilities for Data Scientist positions?",
                   "function": "vector_retrieval",
-                  "file_names": [
-                    "PALANTIR_JOBS_1", 
-                    "PALANTIR_JOBS_2", 
-                    "PALANTIR_JOBS_3", 
-                    "PALANTIR_JOBS_4", 
-                    "PALANTIR_JOBS_5",
-                    "...",
-                  ]
+                  "file_names": ["all_jobs"]
                 }
               ]
             }
@@ -187,14 +183,26 @@ def generate_subquestions(
                 {
                   "question": "Summarize internship positions for US-based roles.",
                   "function": "llm_retrieval",
-                  "file_names": [
-                    "PALANTIR_JOBS_1",
-                    "PALANTIR_JOBS_2",
-                    "PALANTIR_JOBS_3",
-                    "PALANTIR_JOBS_4",
-                    "PALANTIR_JOBS_5",
-                    "...",
-                  ]
+                  "file_names": ["all_jobs"]
+                }
+              ]
+            }
+            """
+        },
+        {
+            "role": "user",
+            "content": "What's the company's official stance on crocheting hats in the office?"
+        },
+        {
+            "role": "function",
+            "name": "SubQuestionBundleList",
+            "content": """
+            {
+              "subquestion_bundle_list": [
+                {
+                  "question": "We do not have any data on crocheting hats in the office.",
+                  "function": "llm_retrieval",
+                  "file_names": []
                 }
               ]
             }
