@@ -213,6 +213,11 @@ def index():
             padding: 10px;
             border-radius: 4px;
             min-height: 100px;
+            **overflow-x: auto;       /* ADDED: horizontal scrolling if needed */
+            white-space: pre-wrap;   /* ADDED: wrap long lines */
+            word-wrap: break-word;   /* ADDED: break long words */
+            max-height: 400px;       /* OPTIONAL: limit overall height */
+            overflow-y: auto;        /* OPTIONAL: vertical scrolling if needed */**
           }
 
           #thinking-section {
@@ -442,4 +447,5 @@ def index():
     </html>
     """
     return html_content
+
 

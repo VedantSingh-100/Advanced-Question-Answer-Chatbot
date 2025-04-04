@@ -27,10 +27,10 @@ def main():
 
     doc_names = [f"PALANTIR_JOBS_{i}" for i in range(1, 85)]
 
-    postings = scrape_palantir_jobs()
-    palantir_docs = load_palantir_job_postings(postings)
-    # vector_stores = generate_vector_stores(cursor, palantir_docs)
-    vector_stores = generate_unified_vector_store(cursor, palantir_docs)
+    # postings = scrape_palantir_jobs()
+    # palantir_docs = load_palantir_job_postings(postings)
+    # # vector_stores = generate_vector_stores(cursor, palantir_docs)
+    # vector_stores = generate_unified_vector_store(cursor, palantir_docs)
 
     # 3. A user task describing the system context
     user_task = """We have a database of job postings from Palantir.
@@ -49,12 +49,9 @@ def main():
         if user_input in ["1", "job matches", "matches"]:
             user_profile_text = get_user_profile_info()
             all_matches = aggregate_job_matches(
-                cursor=cursor,
-                doc_names=doc_names,
-                user_profile_text=user_profile_text,
-                per_table_limit=3,  # top 3 from each file
-                global_top_k=5      # then pick best 5 overall
-            )
+        cursor=cursor,
+        user_profile_text=user_profile_text,
+    )
             if not all_matches:
                 print("\n[INFO] No matches found.\n")
             else:

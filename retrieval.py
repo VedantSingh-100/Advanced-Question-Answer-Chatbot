@@ -107,13 +107,16 @@ def vector_retrieval(cursor, llm_model, question, doc_name=None):
             bullet_sections,
             closing_text,
             chunk_id,
-            data
-        FROM all_jobs_features
-        ORDER BY
+            data,
             Similarity(
                 SentenceFeatureExtractor('{question}'),
                 SentenceFeatureExtractor(data)
-            ) DESC
+            )
+        FROM all_jobs_features
+        ORDER BY Similarity(
+        SentenceFeatureExtractor('{question}'),
+        SentenceFeatureExtractor(data)
+    ) DESC
         LIMIT 3;
     """
 

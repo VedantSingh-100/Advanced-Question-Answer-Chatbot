@@ -124,9 +124,12 @@ def job_match_retrieval(cursor, user_profile_text: str, limit: int = 3):
             Similarity(
                 SentenceFeatureExtractor('{safe_text}'),
                 SentenceFeatureExtractor(data)
-            ) as sim
+            )
         FROM all_jobs_features
-        ORDER BY sim DESC
+        ORDER BY Similarity(
+                SentenceFeatureExtractor('{safe_text}'),
+                SentenceFeatureExtractor(data)
+            )
         LIMIT {limit};
     """
 
@@ -135,17 +138,17 @@ def job_match_retrieval(cursor, user_profile_text: str, limit: int = 3):
     print(f"[DEBUG] Rows returned: {len(df)}")
 
     results = []
+    similarity_col = df.columns[-1]
     if not df.empty:
         for _, row in df.iterrows():
             row_dict = {
-                "doc_name":        row.get("doc_name"),
                 "job_id":          row.get("job_id"),
                 "job_title":       row.get("job_title"),
                 "department":      row.get("department"),
                 "location":        row.get("location"),
                 "workplace_type":  row.get("workplace_type"),
                 "data":            row.get("data"),
-                "similarity":      row.get("sim"),
+                "similarity":      row.get(similarity_col)
             }
             results.append(row_dict)
 
